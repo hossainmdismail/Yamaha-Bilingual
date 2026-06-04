@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/server/mysql';
 import { verifyAuth, getAuthCookie } from '@/lib/server/auth';
+import { getAppSettings } from '@/lib/server/app-settings';
 
 async function checkAdmin() {
   const token = await getAuthCookie();
@@ -8,29 +9,13 @@ async function checkAdmin() {
   await verifyAuth(token);
 }
 
-// Default limits in case they don't exist in the DB yet
-const DEFAULT_SETTINGS = {
-  max_daily_generations: '10',
-  max_weekly_generations: '50',
-  max_monthly_generations: '100',
-  otp_enabled: 'true',
-  eid_camp_enabled: 'false'
-};
-
 export async function GET() {
   try {
     await checkAdmin();
-
-    const dbSettings = await query<any[]>('SELECT setting_key, setting_value FROM app_settings');
-    const settingsMap: Record<string, string> = { ...DEFAULT_SETTINGS };
-    
-    for (const row of dbSettings) {
-      settingsMap[row.setting_key] = row.setting_value;
-    }
-
-    return NextResponse.json({ settings: settingsMap });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 401 });
+    return NextResponse.json({ settings: await getAppSettings() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unauthorized';
+    return NextResponse.json({ error: message }, { status: 401 });
   }
 }
 
@@ -52,6 +37,7 @@ export async function PUT(req: Request) {
     if (max_weekly_generations !== undefined) await updateSetting('max_weekly_generations', max_weekly_generations);
     if (max_monthly_generations !== undefined) await updateSetting('max_monthly_generations', max_monthly_generations);
     if (body.otp_enabled !== undefined) await updateSetting('otp_enabled', body.otp_enabled);
+    if (body.campaign_completed !== undefined) await updateSetting('campaign_completed', body.campaign_completed);
     if (body.eid_camp_enabled !== undefined) {
       await updateSetting('eid_camp_enabled', body.eid_camp_enabled);
 
@@ -70,7 +56,8 @@ export async function PUT(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save settings';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

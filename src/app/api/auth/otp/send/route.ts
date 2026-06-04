@@ -5,6 +5,7 @@ import { getApiMessages, getRequestLanguage } from '@/lib/i18n/api';
 import { z } from 'zod';
 import { cookies } from 'next/headers';
 import { SignJWT } from 'jose';
+import { getBooleanAppSetting } from '@/lib/server/app-settings';
 
 const sendOtpSchema = z.object({
   name: z.string().min(1).optional(),
@@ -18,6 +19,10 @@ const sendOtpSchema = z.object({
 export async function POST(req: Request) {
   try {
     const messages = getApiMessages(await getRequestLanguage(req));
+    if (await getBooleanAppSetting('campaign_completed')) {
+      return NextResponse.json({ error: messages.campaignCompleted }, { status: 403 });
+    }
+
     const body = await req.json();
     const result = sendOtpSchema.safeParse(body);
     if (!result.success) {

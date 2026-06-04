@@ -5,6 +5,7 @@ import { buildImagePrompt, parsePersonaPayload, selectBikeForPersona } from '@/l
 import { getApiMessages, getRequestLanguage } from '@/lib/i18n/api';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
+import { getAppSettings, getBooleanAppSetting } from '@/lib/server/app-settings';
 
 async function getGenerationByHashId(hashId: string) {
   const generations = await query<any[]>(
@@ -77,6 +78,10 @@ export async function POST(req: Request) {
   };
 
   try {
+    if (await getBooleanAppSetting('campaign_completed')) {
+      return NextResponse.json({ error: messages.campaignCompleted }, { status: 403 });
+    }
+
     // We expect a multipart/form-data request
     const formData = await req.formData();
     mark('form-data-parsed');
@@ -121,7 +126,10 @@ export async function POST(req: Request) {
     }
 
     // Rate Limiting Check
-    const settings = await query<any[]>('SELECT setting_key, setting_value FROM app_settings');
+    const settings = Object.entries(await getAppSettings()).map(([setting_key, setting_value]) => ({
+      setting_key,
+      setting_value,
+    }));
     const getSetting = (key: string, def: number) => {
       const s = settings.find(x => x.setting_key === key);
       return s ? parseInt(s.setting_value, 10) : def;

@@ -113,6 +113,7 @@ export default function Upload() {
   const router = useRouter();
   const { language, t } = useLanguage();
   const loadingMessages = t.upload.loadingMessages;
+  const [campaignStatusLoaded, setCampaignStatusLoaded] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -202,28 +203,48 @@ export default function Upload() {
   };
 
   useEffect(() => {
-    const data = sessionStorage.getItem('quizResult');
-    if (data) {
-      setQuizData(JSON.parse(data));
+    async function initUploadPage() {
+      try {
+        const res = await fetch('/api/campaign-status', {
+          cache: 'no-store',
+        });
+        const campaignStatus = await res.json();
+
+        if (campaignStatus.campaignCompleted) {
+          router.replace('/thank-you');
+          return;
+        }
+      } catch (fetchError) {
+        console.error('Failed to fetch campaign status', fetchError);
+      } finally {
+        setCampaignStatusLoaded(true);
+      }
+
+      const data = sessionStorage.getItem('quizResult');
+      if (data) {
+        setQuizData(JSON.parse(data));
+      }
+
+      const pendingGeneration = readPendingGeneration();
+      if (pendingGeneration && isPendingGenerationExpired(pendingGeneration)) {
+        void clearPendingGeneration({ keepFile: true });
+        setError(t.upload.expiredPrevious);
+        setRetryMode(data ? 'retry-current' : 'restart-flow');
+      }
+
+      const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+
+      if (!isAuthenticated && !pendingGeneration) {
+        router.push('/');
+        return;
+      }
+
+      if (!data && !pendingGeneration) {
+        router.push('/quiz');
+      }
     }
 
-    const pendingGeneration = readPendingGeneration();
-    if (pendingGeneration && isPendingGenerationExpired(pendingGeneration)) {
-      void clearPendingGeneration({ keepFile: true });
-      setError(t.upload.expiredPrevious);
-      setRetryMode(data ? 'retry-current' : 'restart-flow');
-    }
-
-    const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
-
-    if (!isAuthenticated && !pendingGeneration) {
-      router.push('/');
-      return;
-    }
-
-    if (!data && !pendingGeneration) {
-      router.push('/quiz');
-    }
+    void initUploadPage();
   }, [router, t.upload.expiredPrevious]);
 
   useEffect(() => {
@@ -356,6 +377,12 @@ export default function Upload() {
       });
       const data = await res.json();
 
+      if (res.status === 403) {
+        await clearPendingGeneration({ keepFile: true });
+        router.replace('/thank-you');
+        return;
+      }
+
       if (res.ok && data.success && data.status === 'completed') {
         await finalizeGeneration({ generationId: data.generationId });
       } else if (res.ok && data.success && data.status === 'processing') {
@@ -421,6 +448,7 @@ export default function Upload() {
     const resumePendingGeneration = async () => {
       if (resumeAttemptedRef.current) return;
       if (quizData === null) return;
+      if (!campaignStatusLoaded) return;
 
       const pendingGeneration = readPendingGeneration();
       if (!pendingGeneration) return;
@@ -485,7 +513,18 @@ export default function Upload() {
     };
 
     void resumePendingGeneration();
-  }, [quizData, t.upload]);
+  }, [campaignStatusLoaded, quizData, t.upload]);
+
+  if (!campaignStatusLoaded) {
+    return (
+      <main className="page-container">
+        <div style={{ textAlign: 'center' }} className="fade-in">
+          <h2 style={{ fontSize: '28px' }}>{t.common.loading}</h2>
+          <div className="spinner" style={{ margin: '16px auto 0' }}></div>
+        </div>
+      </main>
+    );
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

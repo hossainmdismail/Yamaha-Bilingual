@@ -8,6 +8,7 @@ import styles from './quiz.module.css';
 export default function Quiz() {
   const router = useRouter();
   const { language, t } = useLanguage();
+  const [campaignStatusLoaded, setCampaignStatusLoaded] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<any[]>([]);
@@ -17,13 +18,36 @@ export default function Quiz() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // If not authenticated, kick back to OTP page
-    if (localStorage.getItem('isAuthenticated') !== 'true') {
-      router.push('/');
-      return;
+    async function checkCampaignStatus() {
+      try {
+        const res = await fetch('/api/campaign-status', {
+          cache: 'no-store',
+        });
+        const data = await res.json();
+
+        if (data.campaignCompleted) {
+          router.replace('/thank-you');
+          return false;
+        }
+      } catch (error) {
+        console.error('Failed to fetch campaign status', error);
+      } finally {
+        setCampaignStatusLoaded(true);
+      }
+
+      return true;
     }
 
+    // If not authenticated, kick back to OTP page
     async function initQuiz() {
+      const canContinue = await checkCampaignStatus();
+      if (!canContinue) return;
+
+      if (localStorage.getItem('isAuthenticated') !== 'true') {
+        router.push('/');
+        return;
+      }
+
       try {
         const res = await fetch(`/api/quiz/questions?lang=${language}`);
         const data = await res.json();
@@ -98,7 +122,7 @@ export default function Quiz() {
           alert(data.error || t.quiz.personaFailed);
           setSubmitting(false);
         }
-      } catch (err) {
+      } catch {
         alert(t.quiz.networkError);
         setSubmitting(false);
       }
@@ -115,12 +139,14 @@ export default function Quiz() {
     }
   };
 
-  if (loading || questions.length === 0) {
+  if (!campaignStatusLoaded || loading || questions.length === 0) {
     return (
       <main className={styles.container}>
         <div style={{ textAlign: 'center', marginTop: '100px' }} className="fade-in">
           <h2 className={styles.questionTitle}>{t.quiz.loadingQuiz}</h2>
-          {questions.length === 0 && <p style={{ color: 'var(--text-secondary)', marginTop: '12px' }}>{t.quiz.loadFailed}</p>}
+          {campaignStatusLoaded && !loading && questions.length === 0 && (
+            <p style={{ color: 'var(--text-secondary)', marginTop: '12px' }}>{t.quiz.loadFailed}</p>
+          )}
           <div className="spinner" style={{ margin: '0 auto' }}></div>
         </div>
       </main>

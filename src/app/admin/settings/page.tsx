@@ -6,7 +6,7 @@ import styles from '../admin.module.css';
 
 export default function SettingsPage() {
   const { t } = useLanguage();
-  const [settings, setSettings] = useState<any>({});
+  const [settings, setSettings] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -105,6 +105,25 @@ export default function SettingsPage() {
             </button>
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginTop: '4px' }}>
               {t.admin.settings.eidCampHelp}
+            </p>
+          </div>
+
+          <div>
+            <label className={styles.statLabel}>{t.admin.settings.campaignCompleteMode}</label>
+            <button
+              type="button"
+              className={`${styles.toggleButton} ${settings.campaign_completed === 'true' ? styles.toggleButtonActive : ''}`}
+              onClick={() => setSettings({
+                ...settings,
+                campaign_completed: settings.campaign_completed === 'true' ? 'false' : 'true'
+              })}
+              aria-pressed={settings.campaign_completed === 'true'}
+            >
+              <span>{settings.campaign_completed === 'true' ? t.admin.settings.campaignCompleteOn : t.admin.settings.campaignCompleteOff}</span>
+              <span className={`${styles.toggleKnob} ${settings.campaign_completed === 'true' ? styles.toggleKnobActive : ''}`} />
+            </button>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginTop: '4px' }}>
+              {t.admin.settings.campaignCompleteHelp}
             </p>
           </div>
           
